@@ -714,7 +714,7 @@ cdef class JB_Env:
         version = self.env[0].GetVersion(self.env)
         return (int(version / 65536), version % 65536)
 
-    def find_class(self, object name):
+    def find_class(self, unicode name):
         '''Find a Java class by name
 
         :param name: the class name with "/" as the path separator, e.g. "java/lang/String"
@@ -801,7 +801,7 @@ cdef class JB_Env:
         result.is_static = False
         return result
 
-    def get_static_method_id(self, JB_Class c, object name, object sig):
+    def get_static_method_id(self, JB_Class c, unicode name, unicode sig):
         '''Find the method ID for a static method on a class
 
         :param c: a class retrieved by find_class or get_object_class
