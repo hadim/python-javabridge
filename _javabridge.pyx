@@ -8,6 +8,7 @@ Copyright (c) 2009-2013 Broad Institute
 All rights reserved.
 
 """
+from __future__ import unicode_literals
 
 import numpy as np
 import sys
@@ -117,7 +118,7 @@ cdef extern from "jni.h":
 
     struct JNINativeInterface_:
         jint (* GetVersion)(JNIEnv *env) nogil
-        jclass (* FindClass)(JNIEnv *env, char *name) nogil
+        jclass (* FindClass)(JNIEnv *env, str name) nogil
         jclass (* GetObjectClass)(JNIEnv *env, jobject obj) nogil
         jboolean (* IsInstanceOf)(JNIEnv *env, jobject obj, jclass klass) nogil
         jclass (* NewGlobalRef)(JNIEnv *env, jobject lobj) nogil
@@ -132,8 +133,8 @@ cdef extern from "jni.h":
         #
         # Method IDs
         #
-        jmethodID (*GetMethodID)(JNIEnv *env, jclass clazz, char *name, char *sig) nogil
-        jmethodID (*GetStaticMethodID)(JNIEnv *env, jclass clazz, char *name, char *sig) nogil
+        jmethodID (*GetMethodID)(JNIEnv *env, jclass clazz, str name, str sig) nogil
+        jmethodID (*GetStaticMethodID)(JNIEnv *env, jclass clazz, str name, str sig) nogil
         jmethodID (*FromReflectedMethod)(JNIEnv *env, jobject method) nogil
         jmethodID (*FromReflectedField)(JNIEnv *env, jobject field) nogil
         #
@@ -169,7 +170,7 @@ cdef extern from "jni.h":
         #
         # Methods for fields
         #
-        jfieldID (* GetFieldID)(JNIEnv *env, jclass clazz, char *name, char *sig) nogil
+        jfieldID (* GetFieldID)(JNIEnv *env, jclass clazz, str name, str sig) nogil
         jobject (* GetObjectField)(JNIEnv *env, jobject obj, jfieldID fieldID) nogil
         jboolean (* GetBooleanField)(JNIEnv *env, jobject obj, jfieldID fieldID) nogil
         jbyte (* GetByteField)(JNIEnv *env, jobject obj, jfieldID fieldID) nogil
@@ -190,7 +191,7 @@ cdef extern from "jni.h":
         void (*SetFloatField)(JNIEnv *env, jobject obj, jfieldID fieldID, jfloat val) nogil
         void (*SetDoubleField)(JNIEnv *env, jobject obj, jfieldID fieldID, jdouble val) nogil
 
-        jfieldID (*GetStaticFieldID)(JNIEnv *env, jclass clazz, char *name, char *sig) nogil
+        jfieldID (*GetStaticFieldID)(JNIEnv *env, jclass clazz, str name, str sig) nogil
         jobject (* GetStaticObjectField)(JNIEnv *env, jclass clazz, jfieldID fieldID) nogil
         jboolean (* GetStaticBooleanField)(JNIEnv *env, jclass clazz, jfieldID fieldID) nogil
         jbyte (* GetStaticByteField)(JNIEnv *env, jclass clazz, jfieldID fieldID) nogil
@@ -213,7 +214,7 @@ cdef extern from "jni.h":
         #
         # Methods for handling strings
         #
-        jobject (* NewStringUTF)(JNIEnv *env, char *utf) nogil
+        jobject (* NewStringUTF)(JNIEnv *env, str utf) nogil
         jobject (* NewString)(JNIEnv *env, jchar *unicode, jsize len) nogil
         char *(* GetStringUTFChars)(JNIEnv *env, jobject str, jboolean *is_copy) nogil
         void (* ReleaseStringUTFChars)(JNIEnv *env, jobject str, char *chars) nogil
@@ -293,7 +294,7 @@ cdef extern from "jni.h":
     jint JNI_GetDefaultJavaVMInitArgs(void *args) nogil
 
 cdef extern from "mac_javabridge_utils.h":
-    int MacStartVM(JavaVM **, JavaVMInitArgs *pVMArgs, char *class_name) nogil
+    int MacStartVM(JavaVM **, JavaVMInitArgs *pVMArgs, char * class_name) nogil
     void MacStopVM() nogil
     void MacRunLoopInit() nogil
     void MacRunLoopRun() nogil
@@ -714,7 +715,7 @@ cdef class JB_Env:
         version = self.env[0].GetVersion(self.env)
         return (int(version / 65536), version % 65536)
 
-    def find_class(self, unicode name):
+    def find_class(self, str name):
         '''Find a Java class by name
 
         :param name: the class name with "/" as the path separator, e.g. "java/lang/String"
@@ -723,7 +724,6 @@ cdef class JB_Env:
         cdef:
             jclass c
             JB_Class result
-        name = to_b(name)
         c = self.env[0].FindClass(self.env, name)
         if c == NULL:
             print "Failed to get class "+name
@@ -776,7 +776,7 @@ cdef class JB_Env:
         '''Clear the current exception'''
         self.env[0].ExceptionClear(self.env)
 
-    def get_method_id(self, JB_Class c, char *name, char *sig):
+    def get_method_id(self, JB_Class c, str name, str sig):
         '''Find the method ID for a method on a class
 
         :param c: a class retrieved by find_class or get_object_class
@@ -801,7 +801,7 @@ cdef class JB_Env:
         result.is_static = False
         return result
 
-    def get_static_method_id(self, JB_Class c, unicode name, unicode sig):
+    def get_static_method_id(self, JB_Class c, str name, str sig):
         '''Find the method ID for a static method on a class
 
         :param c: a class retrieved by find_class or get_object_class
@@ -815,8 +815,6 @@ cdef class JB_Env:
         cdef:
             jmethodID id
             __JB_MethodID result
-        name = to_b(name)
-        sig = to_b(sig)
         id = self.env[0].GetStaticMethodID(self.env, c.c, name, sig)
         if id == NULL:
             return
@@ -1038,7 +1036,7 @@ cdef class JB_Env:
         free(<void *>values)
         return result
 
-    def get_field_id(self, JB_Class c, char *name, char *sig):
+    def get_field_id(self, JB_Class c, str name, str sig):
         '''Get a field ID for a class
 
         :param c: class (from :py:meth:`.find_class` or similar)
@@ -1263,7 +1261,7 @@ cdef class JB_Env:
             jdouble jvalue = float(value)
         self.env[0].SetDoubleField(self.env, o.o, field.id, jvalue)
 
-    def get_static_field_id(self, JB_Class c, char *name, char *sig):
+    def get_static_field_id(self, JB_Class c, str name, str sig):
         '''Look up a static field ID on a class
 
         :param c: the object's class (e.g. as retrieved from :py:meth:`.find_class`)
@@ -1566,7 +1564,7 @@ cdef class JB_Env:
              raise e
         return jbo
 
-    def new_string_utf(self, char *s):
+    def new_string_utf(self, str s):
         '''Turn a Python string into a Java string object
 
         :param s: a UTF-8 encoded Python string
