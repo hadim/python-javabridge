@@ -4,20 +4,29 @@ Installation and testing
 Install using pip
 -----------------
 
+::
+   
+    pip install numpy
     pip install javabridge
 
 
 Install without pip
 -------------------
 
+::
+   
+    # Make sure numpy is installed
     python setup.py install
 
 
 Dependencies
 ------------
 
-The Javabridge requires Python 2.6 or above, Numpy, the Java
+The Javabridge requires Python 2.6 or above, NumPy, the Java
 Development Kit (JDK), and a C compiler.
+
+Linux
+^^^^^
 
 On CentOS 6, the dependencies can be installed as follows::
 
@@ -29,23 +38,67 @@ On Fedora 19, the dependencies can be installed as follows::
 
     yum install gcc numpy python-devel java-1.7.0-openjdk-devel python-pip openssl
 
-On Ubuntu 13.10 and Debian 7.0, the dependencies can be installed as follows::
+On Ubuntu 13 and Debian 7, the dependencies can be installed as follows::
 
    apt-get install openjdk-6-jdk python-pip python-numpy python-dev
 
-On Windows
+On Ubuntu 14, the dependencies can be installed as follows::
 
-If you do not have a C compiler installed, you can install the Windows SDK 7.1
-and .Net Framework 4.0 to perform the compile steps. You should install
-a JDK appropriate for your Java project - the Windows build is tested with
-the Oracle JDK v 1.7. The paths to PIP and Python should be in your PATH 
-(``set PATH=%PATH%;c:\\Python27;c:\\Python27\\scripts`` if Python and PIP installed
-to the default locations). The following steps should perform the install:
+   apt-get install openjdk-7-jdk python-pip python-numpy python-dev
 
-    Open a Windows SDK command prompt (found in the Start menu under 
-    Microsoft Windows SDK). Set the path to Python and PIP if needed.
+On Arch Linux, the dependencies can be installed as follows::
+
+   pacman -S jdk7-openjdk python2-pip python2-numpy base-devel
+
+MacOS X
+^^^^^^^
+
+1. Install the Xcode command-line tools. There are two ways:
+
+   A. Install Xcode from the Mac App Store. (You can also download it
+      from Apple's Mac Dev Center, but that may require membership in
+      the Apple Developer Program.) Install the Xcode command-line
+      tools by starting Xcode, going to Preferences, click on
+      "Downloads" in the toolbar, and click the "Install" button on
+      the line "Command Line Tools." For MacOS 10.9 and Xcode 5 and
+      above, you may have to install the command-line tools by typing
+      ``xcode-select --install`` and following the prompts.
+
+   B. Download the Xcode command-line tools from Apple's Mac Dev
+      Center and install. This may require membership in the Apple
+      Developer Program.
+
+2. Create and activate a `virtualenv` virtual environment if you don't
+   want to clutter up your system-wide python installation with new
+   packages.
+
+3. ``pip install numpy``
+
+4. ``pip install javabridge``
+   
+
+Windows
+^^^^^^^
+
+If you do not have a C compiler installed, you can install the Windows
+SDK 7.1 and .Net Framework 4.0 to perform the compile steps.
+
+You should install a Java Development Kit (JDK) appropriate for your
+Java project. The Windows build is tested with the Oracle JDK 1.7. You
+also need to install the Java Runtime Environment (JRE).  Note that
+the bitness needs to match your python: if you use a 32-bit Python,
+then you need a 32-bit JDK; if you use a 64-bit Python, then you need
+a 64-bit JDK.
+
+The paths to PIP and Python should be in your PATH (``set
+PATH=%PATH%;c:\\Python27;c:\\Python27\\scripts`` if Python and PIP
+installed to the default locations). The following steps should
+perform the install:
+
+1. Open a Windows SDK command prompt (found in the Start menu under
+   Microsoft Windows SDK). Set the path to Python and PIP if needed.
     
-    Issue the commands::
+2. Issue the commands::
     
         set MSSdk=1
         set DISTUTILS_USE_SDK=1

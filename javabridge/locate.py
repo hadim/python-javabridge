@@ -14,12 +14,14 @@ from __future__ import absolute_import
 import os
 import sys
 import logging
+import subprocess
 
 is_linux = sys.platform.startswith('linux')
 is_mac = sys.platform == 'darwin'
 is_win = sys.platform.startswith("win")
 is_win64 = (is_win and (os.environ["PROCESSOR_ARCHITECTURE"] == "AMD64"))
-is_msvc = (is_win and sys.version_info[0] >= 2 and sys.version_info[1] >= 6)
+is_msvc = (is_win and (sys.version_info[0] > 2 or
+           (sys.version_info[0] == 2 and sys.version_info[1] >= 6)))
 is_mingw = (is_win and not is_msvc)
 
 logger = logging.getLogger(__name__)
@@ -43,9 +45,13 @@ def find_javahome():
     if 'JAVA_HOME' in os.environ:
         return os.environ['JAVA_HOME']
     elif is_mac:
-        return "Doesn't matter"
+        # Use the "java_home" executable to find the location
+        # see "man java_home"
+        try:
+            return subprocess.check_output(["/usr/libexec/java_home"]).strip()
+        except:
+            return "Doesn't matter"
     elif is_linux:
-        import subprocess
         def get_out(cmd):
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
             o, ignore = p.communicate()
@@ -59,20 +65,23 @@ def find_javahome():
         jdk_dir = os.path.abspath(jdk_dir)
         return jdk_dir
     elif is_win:
-        import _winreg
+        try:
+            import _winreg as winreg
+        except ImportError:
+            import winreg
         java_key_path = 'SOFTWARE\\JavaSoft\\Java Runtime Environment'
         looking_for = java_key_path
         try:
-            kjava = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, java_key_path)
+            kjava = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, java_key_path)
             looking_for = java_key_path + "\\CurrentVersion"
-            kjava_values = dict([_winreg.EnumValue(kjava, i)[:2]
-                                 for i in range(_winreg.QueryInfoKey(kjava)[1])])
+            kjava_values = dict([winreg.EnumValue(kjava, i)[:2]
+                                 for i in range(winreg.QueryInfoKey(kjava)[1])])
             current_version = kjava_values['CurrentVersion']
             looking_for = java_key_path + '\\' + current_version
-            kjava_current = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE,
+            kjava_current = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                             looking_for)
-            kjava_current_values = dict([_winreg.EnumValue(kjava_current, i)[:2]
-                                         for i in range(_winreg.QueryInfoKey(kjava_current)[1])])
+            kjava_current_values = dict([winreg.EnumValue(kjava_current, i)[:2]
+                                         for i in range(winreg.QueryInfoKey(kjava_current)[1])])
             return kjava_current_values['JavaHome']
         except:
             logger.error("Failed to find registry entry: %s\n" %looking_for,
@@ -82,23 +91,28 @@ def find_javahome():
 
 def find_jdk():
     """Find the JDK under Windows"""
+    if 'JDK_HOME' in os.environ:
+        return os.environ['JDK_HOME']
     if is_mac:
-        return "Doesn't matter"
+        return find_javahome()
     if is_win:
-        import _winreg
-        import exceptions
+        try:
+            import winreg
+        except ImportError:
+            import _winreg as winreg
+            from exceptions import WindowsError
         try:
             jdk_key_path = 'SOFTWARE\\JavaSoft\\Java Development Kit'
-            kjdk = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, jdk_key_path)
-            kjdk_values = dict([_winreg.EnumValue(kjdk, i)[:2]
-                                 for i in range(_winreg.QueryInfoKey(kjdk)[1])])
+            kjdk = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, jdk_key_path)
+            kjdk_values = dict([winreg.EnumValue(kjdk, i)[:2]
+                                for i in range(winreg.QueryInfoKey(kjdk)[1])])
             current_version = kjdk_values['CurrentVersion']
-            kjdk_current = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE,
-                                           jdk_key_path + '\\' + current_version)
-            kjdk_current_values = dict([_winreg.EnumValue(kjdk_current, i)[:2]
-                                        for i in range(_winreg.QueryInfoKey(kjdk_current)[1])])
+            kjdk_current = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                          jdk_key_path + '\\' + current_version)
+            kjdk_current_values = dict([winreg.EnumValue(kjdk_current, i)[:2]
+                                        for i in range(winreg.QueryInfoKey(kjdk_current)[1])])
             return kjdk_current_values['JavaHome']
-        except exceptions.WindowsError as e:
+        except WindowsError as e:
             if e.errno == 2:
                 raise RuntimeError(
                     "Failed to find the Java Development Kit. Please download and install the Oracle JDK 1.6 or later")

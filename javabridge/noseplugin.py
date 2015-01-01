@@ -18,8 +18,6 @@ import numpy as np
 np.seterr(all='ignore')
 import sys
 
-import javabridge
-
 
 log = logging.getLogger(__name__)
 
@@ -38,10 +36,14 @@ class JavabridgePlugin(Plugin):
     extra_jvm_args = []
 
     def begin(self):
+        import javabridge
+
         javabridge.start_vm(self.extra_jvm_args,
                             class_path=self.class_path.split(os.pathsep),
                             run_headless=self.headless,
                             max_heap_size=self.max_heap_size)
+        if not self.headless:
+            javabridge.activate_awt()
 
     def options(self, parser, env=os.environ):
         super(JavabridgePlugin, self).options(parser, env=env)
@@ -60,6 +62,7 @@ class JavabridgePlugin(Plugin):
                           help="Set the maximum heap size argument to the JVM as in the -Xmx command-line argument [NOSE_MAX_HEAP_SIZE]")
 
     def configure(self, options, conf):
+        import javabridge
         super(JavabridgePlugin, self).configure(options, conf)
         self.class_path = os.pathsep.join(javabridge.JARS)
         if options.classpath:
@@ -88,4 +91,5 @@ class JavabridgePlugin(Plugin):
             return TestRunnerProxy()
             
     def finalize(self, result):
+        import javabridge
         javabridge.kill_vm()

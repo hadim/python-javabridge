@@ -29,6 +29,11 @@ import uuid
 from .locate import find_javahome
 import javabridge
 
+if sys.version.startswith("3"):
+    # define a bogus unicode
+    class unicode(object):
+        pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +86,13 @@ def _find_jvm_windows():
             for place_to_look in ('client','server'):
                 jvm_dir = os.path.join(jre_bin, place_to_look)
                 if os.path.isfile(os.path.join(jvm_dir, "jvm.dll")):
-                    os.environ['PATH'] = ';'.join((os.environ['PATH'], jvm_dir, jre_bin))
+                    new_path = ';'.join((os.environ['PATH'], jvm_dir, jre_bin))
+                    if isinstance(os.environ['PATH'], str) and \
+                       isinstance(new_path, unicode):
+                        # Don't inadvertantly set an environment variable
+                        # to unicode: causes subprocess.check_call to fail
+                        new_path = new_path.encode("utf-8")
+                    os.environ['PATH'] = new_path
                     found_jvm = True
                     break
             if found_jvm:
@@ -113,12 +124,8 @@ if sys.platform == "win32":
     os.environ["PATH"] = os.environ["PATH"] + os.pathsep + _find_jvm()
 
 import _javabridge
-__vm = None
-__wake_event = threading.Event()
 __dead_event = threading.Event()
-__thread_local_env = threading.local()
 __kill = [False]
-__dead_objects = []
 __main_thread_closures = []
 __run_headless = False
 
@@ -146,7 +153,7 @@ class AtExit(object):
         
 __start_thread = None        
 
-def start_vm(args=[], class_path=None, max_heap_size=None, run_headless=False):
+def start_vm(args=None, class_path=None, max_heap_size=None, run_headless=False):
     '''Start the Java Virtual Machine.
 
     :param args: a list of strings, encoding arbitrary startup options
@@ -175,8 +182,10 @@ def start_vm(args=[], class_path=None, max_heap_size=None, run_headless=False):
     :throws: :py:exc:`javabridge.JVMNotFoundError`
 
     '''
-    global __vm
     global __start_thread
+    
+    if args == None:
+        args = []
 
     # Put this before the __vm check so the unit test can test it even
     # though the JVM is already started.
@@ -185,7 +194,7 @@ def start_vm(args=[], class_path=None, max_heap_size=None, run_headless=False):
 
     _find_jvm()
     
-    if __vm is not None:
+    if _javabridge.get_vm().is_active():
         return
     start_event = threading.Event()
 
@@ -197,13 +206,8 @@ def start_vm(args=[], class_path=None, max_heap_size=None, run_headless=False):
         args.append("-Xmx" + max_heap_size)
     
     def start_thread(args=args, run_headless=run_headless):
-        global __vm
-        global __wake_event
-        global __dead_event
-        global __thread_local_env
         global __i_am_the_main_thread
         global __kill
-        global __dead_objects
         global __main_thread_closures
         global __run_headless
         
@@ -213,54 +217,37 @@ def start_vm(args=[], class_path=None, max_heap_size=None, run_headless=False):
             args = args + [r"-Djava.awt.headless=true"]
 
         logger.debug("Creating JVM object")
-        __thread_local_env.is_main_thread = True
-        __vm = _javabridge.JB_VM()
+        _javabridge.set_thread_local("is_main_thread", True)
+        vm = _javabridge.get_vm()
         #
         # We get local copies here and bind them in a closure to guarantee
         # that they exist past atexit.
         #
-        vm = __vm
-        wake_event = __wake_event
-        dead_event = __dead_event
         kill = __kill
-        dead_objects = __dead_objects
         main_thread_closures = __main_thread_closures
-        thread_local_env = __thread_local_env
         try:
             if sys.platform == "darwin":
                 logger.debug("Launching VM in non-python thread")
                 vm.create_mac(args, RQCLS)
                 logger.debug("Attaching to VM in monitor thread")
-                env = vm.attach()
-                __thread_local_env.env = env
+                env = _javabridge.jb_attach()
             else:
                 env = vm.create(args)
-                __thread_local_env.env = env
             init_context_class_loader()
         except:
             traceback.print_exc()
             logger.error("Failed to create Java VM")
-            __vm = None
             return
         finally:
             logger.debug("Signalling caller")
             start_event.set()
-        wake_event.clear()
         while True:
-            wake_event.wait()
-            wake_event.clear()
-            while(len(dead_objects)):
-                dead_object = dead_objects.pop()
-                if isinstance(dead_object, _javabridge.JB_Object):
-                    # Object may have been totally GC'ed
-                    env.dealloc_jobject(dead_object)
+            _javabridge.wait_for_wake_event()
+            _javabridge.reap()
             while(len(main_thread_closures)):
                 main_thread_closures.pop()()
             if kill[0]:
                 break
-        def null_defer_fn(jbo):
-            '''Install a "do nothing" defer function in our env'''
-            pass
         if sys.platform == "darwin":
             #
             # Torpedo the main thread RunnableQueue
@@ -268,19 +255,16 @@ def start_vm(args=[], class_path=None, max_heap_size=None, run_headless=False):
             rqcls = env.find_class(RQCLS)
             stop_id = env.get_static_method_id(rqcls, "stop", "()V")
             env.call_static_method(rqcls, stop_id)
-            env.set_defer_fn(null_defer_fn)
-            vm.detach()
+            _javabridge.jb_detach()
         else:
-            env.set_defer_fn(null_defer_fn)
             vm.destroy()
-        __vm = None
-        dead_event.set()
+        __dead_event.set()
         
     __start_thread = threading.Thread(target=start_thread)
     __start_thread.setName("JVMMonitor")
     __start_thread.start()
     start_event.wait()
-    if __vm is None:
+    if not _javabridge.get_vm().is_active():
         raise RuntimeError("Failed to start Java VM")
     attach()
     
@@ -622,10 +606,7 @@ def run_in_main_thread(closure, synchronous):
 
     '''
     global __main_thread_closures
-    global __wake_event
-    global __thread_local_env
-    if (hasattr(__thread_local_env, "is_main_thread") and
-        __thread_local_env.is_main_thread):
+    if _javabridge.get_thread_local("is_main_thread", False):
         return closure()
     
     if synchronous:
@@ -641,14 +622,14 @@ def run_in_main_thread(closure, synchronous):
                 exception[0] = e
             done_event.set()
         __main_thread_closures.append(synchronous_closure)
-        __wake_event.set()
+        _javabridge.set_wake_event()
         done_event.wait()
         if exception[0] is not None:
             raise exception[0]
         return result[0]
     else:
         __main_thread_closures.append(closure)
-        __wake_event.set()
+        _javabridge.set_wake_event()
     
 def print_all_stack_traces():
     thread_map = static_call("java/lang/Thread","getAllStackTraces",
@@ -700,92 +681,44 @@ def deactivate_awt():
         r = run_script(CLOSE_ALL_WINDOWS)
         execute_runnable_in_main_thread(r, True)
         __awt_is_active = False
-#
-# We make kill_vm as a closure here to bind local copies of the global objects
-#
-def make_kill_vm():
-    '''Kill the currently-running Java environment'''
-    global __wake_event
-    global __dead_event
-    global __kill
-    global __thread_local_env
-    global __run_headless
-    global __start_thread
-    
-    wake_event = __wake_event
-    dead_event = __dead_event
-    kill = __kill
-    thread_local_env = __thread_local_env
-    if not hasattr(thread_local_env, "attach_count"):
-        thread_local_env.attach_count = 0
-    def kill_vm():
-        '''Kill the JVM. Once it is killed, it cannot be restarted.'''
-        global __vm
-        if __vm is None:
-            return
-        deactivate_awt()
-        gc.collect()
-        while getattr(thread_local_env, "attach_count", 0) > 0:
-            detach()
-        kill[0] = True
-        wake_event.set()
-        dead_event.wait()
-        __start_thread.join()
-    return kill_vm
-
-'''Kill the currently-running Java environment
-
-fn_poll_ui - if present, use this function to run the UI's event loop
-             while waiting for the JVM to close AWT.
-'''
-kill_vm = make_kill_vm()
+def kill_vm():
+    '''Kill the JVM. Once it is killed, it cannot be restarted.'''
+    if not _javabridge.get_vm().is_active():
+        return
+    deactivate_awt()
+    gc.collect()
+    while _javabridge.get_thread_local("attach_count", 0) > 0:
+        detach()
+    __kill[0] = True
+    _javabridge.set_wake_event()
+    __dead_event.wait()
+    __start_thread.join()
     
 def attach():
     '''Attach to the VM, receiving the thread's environment'''
-    global __thread_local_env
-    global __vm
-    assert isinstance(__vm, _javabridge.JB_VM)
-    attach_count = getattr(__thread_local_env, "attach_count", 0)
-    __thread_local_env.attach_count = attach_count + 1
+    attach_count = _javabridge.get_thread_local("attach_count", 0)
+    _javabridge.set_thread_local("attach_count", attach_count + 1)
     if attach_count == 0:
-        __thread_local_env.env = __vm.attach_as_daemon()
+        _javabridge.jb_attach()
         init_context_class_loader()
-    return __thread_local_env.env
+    return _javabridge.get_env()
     
 def get_env():
     '''Return the thread's environment
     
     Note: call start_vm() and attach() before calling this
     '''
-    global __thread_local_env
-    if not hasattr(__thread_local_env, 'env'):
-        attach()
-    return __thread_local_env.env
+    return _javabridge.get_env()
 
 def detach():
     '''Detach from the VM, releasing the thread's environment'''
-    global __vm
-    global __thread_local_env
-    global __dead_objects
-    global __wake_event
-    global __kill
-    
-    assert __thread_local_env.attach_count > 0
-    __thread_local_env.attach_count -= 1
-    if __thread_local_env.attach_count > 0:
+    attach_count = _javabridge.get_thread_local("attach_count", 0)
+    assert attach_count > 0
+    attach_count -= 1
+    _javabridge.set_thread_local("attach_count", attach_count)
+    if attach_count > 0:
         return
-    env = __thread_local_env.env
-    dead_objects = __dead_objects
-    wake_event = __wake_event
-    kill = __kill
-    def defer_fn(jbo):
-        '''Do deallocation on the JVM's thread after detach'''
-        if not kill[0]:
-            dead_objects.append(jbo)
-            wake_event.set()
-    env.set_defer_fn(defer_fn)
-    __thread_local_env.env = None
-    __vm.detach()
+    _javabridge.jb_detach()
 
 def init_context_class_loader():
     '''Set the thread's context class loader to the system class loader
@@ -999,13 +932,16 @@ def get_static_field(klass, name, sig):
         class_name = str(klass)
         klass = env.find_class(class_name)
         if klass is None:
-            raise ValueError("Could not load class %s"%class_name)
+            jexception = get_env().exception_occurred()
+            raise JavaException(jexception)
     field_id = env.get_static_field_id(klass, name, sig)
     if field_id is None:
-        raise JavaError('Could not find field name = %s '
-                        'with signature = %s' %(name, sig))
+        jexception = get_env().exception_occurred()
+        raise JavaException(jexception)
     if sig == 'Z':
         return env.get_static_boolean_field(klass, field_id)
+    elif sig == 'C':
+        return env.get_static_char_field(klass, field_id)
     elif sig == 'B':
         return env.get_static_byte_field(klass, field_id)
     elif sig == 'S':
@@ -1040,8 +976,12 @@ def set_static_field(klass, name, sig, value):
         class_name = str(klass)
         klass = env.find_class(class_name)
         if klass is None:
-            raise ValueError("Could not load class %s"%class_name)
+            jexception = get_env().exception_occurred()
+            raise JavaException(jexception)
     field_id = env.get_static_field_id(klass, name, sig)
+    if field_id is None:
+        jexception = get_env().exception_occurred()
+        raise JavaException(jexception)
     if sig == 'Z':
         env.set_static_boolean_field(klass, field_id, value)
     elif sig == 'B':
@@ -1056,7 +996,7 @@ def set_static_field(klass, name, sig, value):
     elif sig == 'J':
         env.set_static_long_field(klass, field_id, value)
     elif sig == 'F':
-        env.get_static_float_field(klass, field_id, value)
+        env.set_static_float_field(klass, field_id, value)
     elif sig == 'D':
         env.set_static_double_field(klass, field_id, value)
     else:
@@ -1071,14 +1011,17 @@ def get_field(o, name, sig):
     :param sig: the signature, typically 'I' or 'Ljava/lang/String;'
 
     '''
+    assert isinstance(o, javabridge.JB_Object)
     env = get_env()
     klass = env.get_object_class(o)
     field_id = env.get_field_id(klass, name, sig)
     if field_id is None:
-        raise JavaError('Could not find field name = %s '
-                        'with signature = %s' %(name, sig))
+        jexception = get_env().exception_occurred()
+        raise JavaException(jexception)
     if sig == 'Z':
         return env.get_boolean_field(o, field_id)
+    elif sig == 'C':
+        return env.get_char_field(o, field_id)
     elif sig == 'B':
         return env.get_byte_field(o, field_id)
     elif sig == 'S':
@@ -1102,11 +1045,17 @@ def set_field(o, name, sig, value):
     :param sig: the signature, typically 'I' or 'Ljava/lang/String;'
     :param value: the value to set
     '''
+    assert isinstance(o, javabridge.JB_Object)
     env = get_env()
     klass = env.get_object_class(o)
     field_id = env.get_field_id(klass, name, sig)
+    if field_id is None:
+        jexception = get_env().exception_occurred()
+        raise JavaException(jexception)
     if sig == 'Z':
         env.set_boolean_field(o, field_id, value)
+    elif sig == 'C':
+        env.set_char_field(o, field_id, value)
     elif sig == 'B':
         env.set_byte_field(o, field_id, value)
     elif sig == 'C':
@@ -1629,7 +1578,7 @@ def iterate_java(iterator, fn_wrapper=None):
     global iterator_has_next_id, iterator_next_id
     env = get_env()
     iterator_class = env.find_class("java/util/Iterator")
-    if not isinstance(iterator, javabridge.JB_Object):
+    if not isinstance(iterator, _javabridge.JB_Object):
         raise JavaError("%s is not a Javabridge JB_Object" % repr(iterator))
     if not env.is_instance_of(iterator, iterator_class):
         raise JavaError("%s does not implement the java.util.Iterator interface" %

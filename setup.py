@@ -22,7 +22,12 @@ import subprocess
 import traceback
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
-from numpy import get_include
+try:
+    from numpy import get_include
+except ImportError:
+    raise RuntimeError("""Numpy must be installed before installing javabridge.
+It cannot be installed automatically when pip-installing javabridge.
+See https://github.com/CellProfiler/python-javabridge/issues/30""")
 
 # Hack to avoid importing the javabridge package
 sys.path.append(os.path.join(os.path.dirname(__file__), 'javabridge'))
@@ -44,9 +49,12 @@ def build_cython():
     """
     stems = ['_javabridge', '_javabridge_mac', '_javabridge_nomac']
     pyx_filenames = [in_cwd(s + '.pyx') for s in stems]
-    if any(map(os.path.exists, pyx_filenames)):
-        cmd = ['cython'] + pyx_filenames
-        print(' '.join(cmd))
+    c_filenames = [in_cwd(s + '.c') for s in stems]
+    nc_pyx_filenames = [
+        pyx for pyx, c in zip(pyx_filenames, c_filenames)
+        if os.path.exists(pyx) and needs_compilation(c, pyx)]
+    if len(nc_pyx_filenames) > 0:
+        cmd = ['cython'] + nc_pyx_filenames
         subprocess.check_call(cmd)
 
 def ext_modules():
@@ -84,13 +92,10 @@ def ext_modules():
             p.communicate()
             library_dirs = [os.path.abspath(".")]
         else:
-            #
-            # Use the MSVC lib in the JDK
-            #
-            extra_link_args = ['/MANIFEST']
+            #extra_link_args = ['/MANIFEST']
+            extra_link_args = []
             jdk_lib = os.path.join(jdk_home, "lib")
             library_dirs = [jdk_lib]
-            javabridge_sources.append("strtoull.c")
 
         libraries = ["jvm"]
     elif is_mac:
@@ -134,6 +139,9 @@ def package_path(relpath):
     return os.path.normpath(os.path.join(os.path.dirname(__file__), relpath))
 
 def build_jar_from_single_source(jar, source):
+    if sys.platform == 'win32':
+        jar = jar.replace("/", os.path.sep)
+        source = source.replace("/", os.path.sep)
     if needs_compilation(jar, source):
         javac_loc = find_javac_cmd()
         javac_command = [javac_loc, package_path(source)]
@@ -143,8 +151,8 @@ def build_jar_from_single_source(jar, source):
             os.mkdir(os.path.dirname(jar))
         jar_command = [find_jar_cmd(), 'cf', package_path(jar)]
         for klass in glob.glob(source[:source.rindex('.')] + '*.class'):
-            jar_command.extend(['-C', package_path('java'), klass[klass.index('/') + 1:]])
-        print(' '.join(jar_command))
+            java_klass_path = klass[klass.index(os.path.sep) + 1:].replace(os.path.sep, "/")
+            jar_command.extend(['-C', package_path('java'), java_klass_path])
         subprocess.check_call(jar_command)
 
 def build_runnablequeue():
@@ -225,7 +233,8 @@ cell image analysis software CellProfiler (cellprofiler.org).''',
           classifiers=['Development Status :: 5 - Production/Stable',
                        'License :: OSI Approved :: BSD License',
                        'Programming Language :: Java',
-                       'Programming Language :: Python :: 2 :: Only'
+                       'Programming Language :: Python :: 2',
+                       'Programming Language :: Python :: 3'
                        ],
           license='BSD License',
           install_requires=['numpy'],

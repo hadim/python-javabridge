@@ -69,9 +69,57 @@ class TestJutil(unittest.TestCase):
         self.assertEqual(s.charAt.__doc__, "My documentation")
         self.assertEqual(s.charAt(0), "H")
     
-    def test_01_05_get_static_field(self):
+    def test_01_05_00_get_static_field(self):
         klass = self.env.find_class("java/lang/Short")
         self.assertEqual(javabridge.get_static_field(klass, "MAX_VALUE", "S"), 2**15 - 1)
+
+    def test_01_05_01_no_field_for_get_static_field(self):
+        def fn():
+            javabridge.get_static_field(
+                'java/lang/Object', "NoSuchField", "I")
+        self.assertRaises(javabridge.JavaException, fn)
+        
+    def test_01_05_02_no_class_for_get_static_field(self):
+        def fn():
+            javabridge.get_static_field(
+                'no/such/class', "field", "I")
+        self.assertRaises(javabridge.JavaException, fn)
+        
+    def test_01_05_03_set_static_field(self):
+        class_name = "org/cellprofiler/javabridge/test/RealRect"
+        test_cases = (
+            ("fs_char", "C", "A"),
+            ("fs_byte", "B", 3),
+            ("fs_short", "S", 15),
+            ("fs_int", "I", 392),
+            ("fs_long", "J", -14),
+            ("fs_float", "F", 1.03),
+            ("fs_double", "D", -889.1),
+            ("fs_object", "Ljava/lang/Object;", 
+             javabridge.make_instance("java/lang/Integer", "(I)V", 15)),
+            ("fs_object", "Ljava/lang/Object;", None))
+        for field_name, signature, value in test_cases:
+            javabridge.set_static_field(class_name, field_name, signature, value)
+            v = javabridge.get_static_field(class_name, field_name, signature)
+            if isinstance(value, float):
+                self.assertAlmostEqual(v, value)
+            elif isinstance(value, javabridge.JB_Object):
+                self.assertTrue(javabridge.call(
+                    value, "equals", "(Ljava/lang/Object;)Z", v))
+            else:
+                self.assertEqual(v, value)
+                
+    def test_01_05_04_no_field_for_set_static_field(self):
+        def fn():
+            javabridge.set_static_field(
+                'java/lang/Object', "NoSuchField", "I", 5)
+        self.assertRaises(javabridge.JavaException, fn)
+        
+    def test_01_05_05_no_class_for_set_static_field(self):
+        def fn():
+            javabridge.set_static_field(
+                'no/such/class', "field", "I", 5)
+        self.assertRaises(javabridge.JavaException, fn)
     
     def test_01_06_get_enumeration_wrapper(self):
         properties = javabridge.static_call("java/lang/System", "getProperties",
@@ -192,24 +240,16 @@ class TestJutil(unittest.TestCase):
         jobj = jobjs[0]
         self.assertEqual(javabridge.call(jobj, "intValue", "()I"), my_value)
     
-    #def test_02_04_memory(self):
-        #'''Make sure that memory is truly released when an object is dereferenced'''
-        #env = self.env
-        #self.assertTrue(isinstance(env,javabridge.javabridge.JB_Env))
-        #for i in range(25):
-            #print "starting pass %d" % (i+1)
-            #memory = np.random.uniform(size=1000*1000*10)
-            #jarray = env.make_double_array(memory)
-            #javabridge.static_call("java/util/Arrays", "sort",
-                          #"([D)V", jarray)
-            #sorted_memory = env.get_double_array_elements(jarray)
-            #np.testing.assert_almost_equal(sorted_memory[0], memory.min())
-            #np.testing.assert_almost_equal(sorted_memory[-1], memory.max())
-            #del memory
-            #del sorted_memory
-            #del jarray
-            #gc.collect()
-            
+    def test_02_04_non_java_thread_deletes_it(self):
+        '''Delete a Java object on a not-Java thread'''
+        refs = [javabridge.make_instance("java/lang/Integer", "(I)V", 5)]
+        def run():
+            del refs[0]
+            gc.collect()
+        t = threading.Thread(target = run)
+        t.start()
+        t.join()
+        
     def test_03_01_cw_from_class(self):
         '''Get a class wrapper from a class'''
         c = javabridge.get_class_wrapper(javabridge.make_instance('java/lang/Integer', '(I)V',
@@ -517,14 +557,46 @@ class TestJutil(unittest.TestCase):
         del l[1]
         self.assertSequenceEqual(l, ["Foo", "Baz"])
         
-    def test_09_01_get_field(self):
+    def test_09_01_00_get_field(self):
         o = javabridge.make_instance("org/cellprofiler/javabridge/test/RealRect", "(DDDD)V", 1, 2, 3, 4)
         self.assertEqual(javabridge.get_field(o, "x", "D"), 1)
         
-    def test_09_02_set_field(self):
-        o = javabridge.make_instance("org/cellprofiler/javabridge/test/RealRect", "(DDDD)V", 1, 2, 3, 4)
-        javabridge.set_field(o, "x", "D", 5.5)
-        self.assertEqual(javabridge.get_field(o, "x", "D"), 5.5)
+    def test_09_02_get_field_no_such_field(self):
+        def fn():
+            o = javabridge.make_instance("java/lang/Object", "()V")
+            javabridge.get_field(o, "NoSuchField", "I")
+        self.assertRaises(javabridge.JavaException, fn)
+        
+    def test_09_03_set_field(self):
+        class_name = "org/cellprofiler/javabridge/test/RealRect"
+        o = javabridge.make_instance(class_name, "()V")
+        test_cases = (
+            ("f_char", "C", "A"),
+            ("f_byte", "B", 3),
+            ("f_short", "S", 15),
+            ("f_int", "I", 392),
+            ("f_long", "J", -14),
+            ("f_float", "F", 1.03),
+            ("f_double", "D", -889.1),
+            ("f_object", "Ljava/lang/Object;", 
+             javabridge.make_instance("java/lang/Integer", "(I)V", 15)),
+            ("f_object", "Ljava/lang/Object;", None))
+        for field_name, signature, value in test_cases:
+            javabridge.set_field(o, field_name, signature, value)
+            v = javabridge.get_field(o, field_name, signature)
+            if isinstance(value, float):
+                self.assertAlmostEqual(v, value)
+            elif isinstance(value, javabridge.JB_Object):
+                self.assertTrue(javabridge.call(
+                    value, "equals", "(Ljava/lang/Object;)Z", v))
+            else:
+                self.assertEqual(v, value)
+
+    def test_09_04_set_field_no_such_field(self):
+        def fn():
+            o = javabridge.make_instance("java/lang/Object", "()V")
+            javabridge.set_field(o, "NoSuchField", "I", 1)
+        self.assertRaises(javabridge.JavaException, fn)
         
     def test_10_01_iterate_java_on_non_iterator(self):
         #
