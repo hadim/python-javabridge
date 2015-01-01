@@ -41,7 +41,7 @@ def find_javahome():
                 if "JAVA_HOME" in os.environ:
                     del os.environ["JAVA_HOME"]
                 return path
-    
+
     if 'JAVA_HOME' in os.environ:
         return os.environ['JAVA_HOME']
     elif is_mac:
@@ -61,7 +61,7 @@ def find_javahome():
             return o
         java_bin = get_out(["bash", "-c", "type -p java"])
         java_dir = get_out(["readlink", "-f", java_bin])
-        jdk_dir = os.path.join(java_dir, "..", "..", "..")
+        jdk_dir = os.path.join(java_dir.decode('utf-8'), "..", "..", "..")
         jdk_dir = os.path.abspath(jdk_dir)
         return jdk_dir
     elif is_win:
@@ -118,7 +118,7 @@ def find_jdk():
                     "Failed to find the Java Development Kit. Please download and install the Oracle JDK 1.6 or later")
             else:
                 raise
-            
+
 def find_javac_cmd():
     """Find the javac executable"""
     if is_win:

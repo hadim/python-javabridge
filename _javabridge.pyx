@@ -49,7 +49,7 @@ cdef extern from "jni.h":
     ctypedef struct _jobject
     ctypedef struct _jmethodID
     ctypedef struct _jfieldID
-    
+
     ctypedef long jint
     ctypedef unsigned char jboolean
     ctypedef unsigned char jbyte
@@ -255,11 +255,11 @@ cdef extern from "jni.h":
         void (*ReleaseFloatArrayElements)(JNIEnv *env, jobject array, jfloat *elems, jint mode) nogil
         void (*ReleaseDoubleArrayElements)(JNIEnv *env, jobject array, jdouble *elems, jint mode) nogil
 
-        void (* GetBooleanArrayRegion)(JNIEnv *env, jobject array, jsize start, 
+        void (* GetBooleanArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                        jsize l, jboolean *buf) nogil
-        void (* GetByteArrayRegion)(JNIEnv *env, jobject array, jsize start, 
+        void (* GetByteArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                     jsize len, jbyte *buf) nogil
-        void (*GetCharArrayRegion)(JNIEnv *env, jobject array, jsize start, 
+        void (*GetCharArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                    jsize len, jchar *buf) nogil
         void (* GetShortArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                      jsize len, jshort *buf) nogil
@@ -272,7 +272,7 @@ cdef extern from "jni.h":
         void (* GetDoubleArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                       jsize len, jdouble *buf) nogil
 
-        void (*SetBooleanArrayRegion)(JNIEnv *env, jobject array, jsize start, 
+        void (*SetBooleanArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                       jsize l, jboolean *buf) nogil
         void (*SetByteArrayRegion)(JNIEnv *env, jobject array, jsize start,
                                    jsize len, jbyte *buf) nogil
@@ -316,10 +316,10 @@ def mac_reset_run_loop():
     '''
     with nogil:
         MacRunLoopReset()
-        
+
 def mac_enter_run_loop():
     '''Enter the run loop and stay there until mac_stop_run_loop is called
-    
+
     This enters the main run loop in the main thread and stays in the
     run loop until some other thread calls MacStopRunLoop.
     '''
@@ -328,10 +328,10 @@ def mac_enter_run_loop():
 
 def mac_poll_run_loop(timeout):
     MacRunLoopRunInMode(timeout)
-    
+
 def mac_stop_run_loop():
     '''Signal the run loop to stop
-    
+
     Wait for the main thread to enter the run loop, if necessary, then
     signal the run loop to stop.
     '''
@@ -340,10 +340,10 @@ def mac_stop_run_loop():
 
 def mac_is_main_thread():
     '''Return True if the current thread runs the main OS/X run loop
-    
+
     '''
     return MacIsMainThread() != 0
-    
+
 def get_default_java_vm_init_args():
     '''Return the version and default option strings as a tuple'''
     cdef:
@@ -353,6 +353,15 @@ def get_default_java_vm_init_args():
     result = JNI_GetDefaultJavaVMInitArgs(<void *>&args)
     return (args.version, [args.options[i].optionString for i in range(args.nOptions)])
 
+if sys.version < '3':
+    def to_b(x):
+        return x
+else:
+    import codecs
+    def to_b(x):
+        print(codecs.latin_1_encode(x)[0])
+        return codecs.latin_1_encode(x)[0]
+
 #####################################################
 #
 # Threading
@@ -361,7 +370,7 @@ def get_default_java_vm_init_args():
 # VM is global. This section helps maintain each thread's
 # Java environment as a thread-local variable shared with
 # the Cython code and maintains the VM singleton.
-# 
+#
 # In addition, there's a wakeup event that's used to
 # communicate with the thread that's in charge of garbage-
 # collection objects deleted on a thread without an environment.
@@ -377,7 +386,7 @@ def wait_for_wake_event():
     '''Wait for dead objects to be enqueued or other event on monitor thread'''
     __wake_event.wait()
     __wake_event.clear()
-    
+
 def set_wake_event():
     '''Wake up the monitor thread'''
     __wake_event.set()
@@ -387,33 +396,33 @@ def get_vm():
     if __vm is None:
         __vm = JB_VM()
     return __vm
-    
+
 def get_thread_local(key, default=None):
     if not hasattr(__thread_local_env, key):
         setattr(__thread_local_env, key, default)
     return getattr(__thread_local_env, key)
-    
+
 def set_thread_local(key, value):
     setattr(__thread_local_env, key, value)
-    
+
 def get_env():
     '''Get the environment for this thread'''
     return get_thread_local("env")
-    
+
 def jb_attach():
     '''Attach to this thread's environment'''
     assert __vm is not None
     assert get_env() is None
     set_thread_local("env", __vm.attach_as_daemon())
     return get_env()
-    
+
 def jb_detach():
     '''Detach from this thread's environment'''
     assert __vm is not None
     assert get_env() is not None
     set_thread_local("env", None)
     __vm.detach()
-    
+
 def reap():
     '''Reap all of the garbage-collected Java objects on the dead_objects list'''
     if len(__dead_objects) > 0:
@@ -436,7 +445,7 @@ cdef class JB_Object:
         self.gc_collect = False
     def __repr__(self):
         return "<Java object at 0x%x>"%<int>(self.o)
-        
+
     def __dealloc__(self):
         cdef:
             JB_Object alternate
@@ -454,7 +463,7 @@ cdef class JB_Object:
     def addr(self):
         '''Return the address of the Java object as a string'''
         return str(<int>(self.o))
-        
+
 cdef class JB_Class:
     '''A Java class'''
     cdef:
@@ -477,7 +486,7 @@ cdef class __JB_MethodID:
 
     def __repr__(self):
         return "<Java method with sig=%s at 0x%x>"%(self.sig,<int>(self.id))
-        
+
 cdef class __JB_FieldID:
     '''A field ID as returned by get_field_id'''
     cdef:
@@ -488,7 +497,7 @@ cdef class __JB_FieldID:
         self.id = NULL
         self.sig = ''
         self.is_static = False
-    
+
     def __repr__(self):
         return "<Java field with sig=%s at 0x%x>"%(self.sig, <int>(self.id))
 
@@ -521,7 +530,7 @@ cdef fill_values(orig_sig, args, jvalue **pvalues):
             values[i].s = int(arg)
             sig = sig[1:]
         elif sig[0] == 'I': #int
-            values[i].i = int(arg) 
+            values[i].i = int(arg)
             sig = sig[1:]
         elif sig[0] == 'J': #long
             values[i].j = int(arg)
@@ -567,11 +576,11 @@ cdef fill_values(orig_sig, args, jvalue **pvalues):
 cdef class JB_VM:
     '''Represents the Java virtual machine'''
     cdef JavaVM *vm
-            
+
     def is_active(self):
         '''Return True if JVM has been started, but not killed'''
         return self.vm != NULL
-        
+
     def create(self, options):
         '''Create the Java VM'''
         cdef:
@@ -586,6 +595,7 @@ cdef class JB_VM:
             raise MemoryError("Failed to allocate JavaVMInitArgs")
         options = [str(option) for option in options]
         for i, option in enumerate(options):
+            option = to_b(option)
             args.options[i].optionString = option
         result = JNI_CreateJavaVM(&self.vm, <void **>&env, &args)
         free(args.options)
@@ -598,22 +608,22 @@ cdef class JB_VM:
 
     def create_mac(self, options, class_name):
         '''Create the Java VM on OS/X in a different thread
-        
-        On the Mac, (assuming this works), you need to start a PThread 
+
+        On the Mac, (assuming this works), you need to start a PThread
         and do so in a very particular manner if you ever want to run UI
         code in Java and Python. This creates that thread and it then runs
         a runnable.
-        
+
         org.cellprofiler.runnablequeue.RunnableQueue is a class that uses
         a queue to ferry runnables to this main thread. You can use that
         and then call RunnableQueue's static methods to run things on the
         main thread.
-        
+
         You should run this on its own thread since it will not return until
         after the JVM exits.
-        
+
         options - the option strings
-        
+
         class_name - the name of the Runnable to run on the Java main thread
         '''
         cdef:
@@ -637,7 +647,7 @@ cdef class JB_VM:
         free(args.options)
         if result != 0:
             raise RuntimeError("Failed to create Java VM. Return code = %d"%result)
-            
+
     def attach(self):
         '''Attach this thread to the VM returning an environment'''
         cdef:
@@ -649,7 +659,7 @@ cdef class JB_VM:
         jenv = JB_Env()
         jenv.env = env
         return jenv
-        
+
     def attach_as_daemon(self):
         '''Attach this thread as a daemon thread'''
         cdef:
@@ -661,16 +671,16 @@ cdef class JB_VM:
         jenv = JB_Env()
         jenv.env = env
         return jenv
-        
+
     def detach(self):
         '''Detach this thread from the VM'''
         self.vm[0].DetachCurrentThread(self.vm)
-    
+
     def destroy(self):
         if self.vm != NULL:
             StopVM(self.vm)
             self.vm = NULL
-    
+
 cdef class JB_Env:
     '''
     Represents the Java VM and the Java execution environment as
@@ -682,16 +692,16 @@ cdef class JB_Env:
 
     def __init__(self):
         self.env = NULL
-        
+
     def __repr__(self):
         return "<JB_Env at 0x%x>"%(<size_t>(self.env))
-    
+
     def __dealloc__(self):
         self.env = NULL
-        
+
     def dealloc_jobject(self, JB_Object jbo):
         '''Deallocate an object as it goes out of scope
-        
+
         DON'T call this externally.
         '''
         self.env[0].DeleteGlobalRef(self.env, jbo.o)
@@ -704,7 +714,7 @@ cdef class JB_Env:
         version = self.env[0].GetVersion(self.env)
         return (int(version / 65536), version % 65536)
 
-    def find_class(self, char *name):
+    def find_class(self, object name):
         '''Find a Java class by name
 
         :param name: the class name with "/" as the path separator, e.g. "java/lang/String"
@@ -713,6 +723,7 @@ cdef class JB_Env:
         cdef:
             jclass c
             JB_Class result
+        name = to_b(name)
         c = self.env[0].FindClass(self.env, name)
         if c == NULL:
             print "Failed to get class "+name
@@ -723,7 +734,7 @@ cdef class JB_Env:
 
     def get_object_class(self, JB_Object o):
         '''Return the class for an object
-        
+
         :param o: a Java object
         :return: a Java class object suitable for calls such as :py:meth:`.get_method_id`
         '''
@@ -734,10 +745,10 @@ cdef class JB_Env:
         result = JB_Class()
         result.c = c
         return result
-        
+
     def is_instance_of(self, JB_Object o, JB_Class c):
         '''Return True if object is instance of class
-        
+
         :param o: a Java object
         :param c: a Java class
         :return: True if o is an instance of c otherwise False
@@ -790,7 +801,7 @@ cdef class JB_Env:
         result.is_static = False
         return result
 
-    def get_static_method_id(self, JB_Class c, char *name, char *sig):
+    def get_static_method_id(self, JB_Class c, object name, object sig):
         '''Find the method ID for a static method on a class
 
         :param c: a class retrieved by find_class or get_object_class
@@ -804,6 +815,8 @@ cdef class JB_Env:
         cdef:
             jmethodID id
             __JB_MethodID result
+        name = to_b(name)
+        sig = to_b(sig)
         id = self.env[0].GetStaticMethodID(self.env, c.c, name, sig)
         if id == NULL:
             return
@@ -815,7 +828,7 @@ cdef class JB_Env:
 
     def from_reflected_method(self, JB_Object method, char *sig, is_static):
         '''Get a method_id given an instance of java.lang.reflect.Method
-        
+
         :param method: a method, e.g. as retrieved from getDeclaredMethods
         :param sig: signature of method
         :param is_static: true if this is a static method
@@ -831,7 +844,7 @@ cdef class JB_Env:
         result.sig = sig
         result.is_static = is_static
         return result
-        
+
     def call_method(self, JB_Object o, __JB_MethodID m, *args):
         '''Call a method on an object with arguments
 
@@ -857,7 +870,7 @@ cdef class JB_Env:
             jdouble dresult
             jobject oresult
             jmethodID m_id = m.id
-        
+
         if m is None:
             raise ValueError("Method ID is None - check your method ID call")
         if m.is_static:
@@ -953,17 +966,17 @@ cdef class JB_Env:
             jdouble dresult
             jobject oresult
             jmethodID m_id = m.id
-        
+
         if m is None:
             raise ValueError("Method ID is None - check your method ID call")
         if not m.is_static:
             raise ValueError("static_call_method called with an object method. Use call_method instead")
         sig = m.sig
         if sig[0] != '(':
-            raise ValueError("Bad function signature: %s"%m.sig)
+            raise ValueError("Bad function signature: {}".format(m.sig))
         arg_end = sig.find(')')
         if arg_end == -1:
-            raise ValueError("Bad function signature: %s"%m.sig)
+            raise ValueError("Bad function signature: {}".format(m.sig))
         arg_sig = sig[1:arg_end]
         error = fill_values(arg_sig, args, &values)
         if error is not None:
@@ -1027,7 +1040,7 @@ cdef class JB_Env:
 
     def get_field_id(self, JB_Class c, char *name, char *sig):
         '''Get a field ID for a class
-        
+
         :param c: class (from :py:meth:`.find_class` or similar)
         :param name: name of field
         :param sig: signature of field (e.g. Ljava/lang/String;)
@@ -1035,7 +1048,7 @@ cdef class JB_Env:
         cdef:
             jfieldID id
             __JB_FieldID jbid
-        
+
         id = self.env[0].GetFieldID(self.env, c.c, name, sig)
         if id == NULL:
             return None
@@ -1044,13 +1057,13 @@ cdef class JB_Env:
         jbid.sig = sig
         jbid.is_static = False
         return jbid
-        
+
     def get_object_field(self, JB_Object o, __JB_FieldID field):
         '''Return an object field
 
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the Java object or None if the field's value is null
         '''
         cdef:
@@ -1062,35 +1075,35 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def get_boolean_field(self, JB_Object o, __JB_FieldID field):
         '''Return a boolean field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype: bool
         '''
         return self.env[0].GetBooleanField(self.env, o.o, field.id) != 0
-        
+
     def get_byte_field(self, JB_Object o, __JB_FieldID field):
         '''Return a byte field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype: int
         '''
         return self.env[0].GetByteField(self.env, o.o, field.id)
-        
+
     def get_char_field(self, JB_Object o, __JB_FieldID field):
         '''Return a char field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the char value stored in the class's field
         :rtype: unichr
         '''
@@ -1098,62 +1111,62 @@ cdef class JB_Env:
 
     def get_short_field(self, JB_Object o, __JB_FieldID field):
         '''Return a short field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype:  int
         '''
         return self.env[0].GetShortField(self.env, o.o, field.id)
-        
+
     def get_int_field(self, JB_Object o, __JB_FieldID field):
         '''Return an int field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype:  int
         '''
         return self.env[0].GetIntField(self.env, o.o, field.id)
-        
+
     def get_long_field(self, JB_Object o, __JB_FieldID field):
         '''Return a long field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype:  long
         '''
         return self.env[0].GetLongField(self.env, o.o, field.id)
-        
+
     def get_float_field(self, JB_Object o, __JB_FieldID field):
         '''Return a float field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype:  float
         '''
         return self.env[0].GetFloatField(self.env, o.o, field.id)
-        
+
     def get_double_field(self, JB_Object o, __JB_FieldID field):
         '''Return a double field's value
-        
+
         :param o: the Java object to be accessed
         :param field: the field to be fetched (from :py:meth:`.get_field_id`)
-        
+
         :return: the field's value
         :rtype:  float
         '''
         return self.env[0].GetDoubleField(self.env, o.o, field.id)
-        
+
     def set_object_field(self, JB_Object o, __JB_FieldID field, JB_Object value):
         '''Set one of a Java object's object fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the Java object that will become the field's new value
@@ -1161,10 +1174,10 @@ cdef class JB_Env:
         cdef:
             jobject jvalue = NULL if value is None else value.o
         self.env[0].SetObjectField(self.env, o.o, field.id, jvalue)
-        
+
     def set_boolean_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's boolean fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the truth value (True or False)
@@ -1172,21 +1185,21 @@ cdef class JB_Env:
         cdef:
             jboolean jvalue = 1 if value else 0
         self.env[0].SetBooleanField(self.env, o.o, field.id, jvalue)
-        
+
     def set_byte_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's byte fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
-        :param value: the field's new int value 
+        :param value: the field's new int value
         '''
         cdef:
             jbyte jvalue = int(value)
         self.env[0].SetByteField(self.env, o.o, field.id, jvalue)
-        
+
     def set_char_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's char fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: should be convertible to unicode and at least 1 char long
@@ -1194,10 +1207,10 @@ cdef class JB_Env:
         cdef:
             jchar jvalue = ord(value[0])
         self.env[0].SetCharField(self.env, o.o, field.id, jvalue)
-        
+
     def set_short_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's short fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the value to set, should be castable using int()
@@ -1205,10 +1218,10 @@ cdef class JB_Env:
         cdef:
             jshort jvalue = int(value)
         self.env[0].SetShortField(self.env, o.o, field.id, jvalue)
-        
+
     def set_int_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's byte fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the value to set, should be castable using int()
@@ -1216,10 +1229,10 @@ cdef class JB_Env:
         cdef:
             jint jvalue = int(value)
         self.env[0].SetIntField(self.env, o.o, field.id, jvalue)
-        
+
     def set_long_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's long fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the value to set, should be castable using int()
@@ -1227,10 +1240,10 @@ cdef class JB_Env:
         cdef:
             jlong jvalue = int(value)
         self.env[0].SetLongField(self.env, o.o, field.id, jvalue)
-        
+
     def set_float_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's byte fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the value to set, should be castable using float()
@@ -1238,10 +1251,10 @@ cdef class JB_Env:
         cdef:
             jfloat jvalue = float(value)
         self.env[0].SetFloatField(self.env, o.o, field.id, jvalue)
-        
+
     def set_double_field(self, JB_Object o, __JB_FieldID field, value):
         '''Set one of a Java object's float fields
-        
+
         :param o: the Java object in question
         :param field: a field id retrieved from :py:meth:`.get_field_id`
         :param value: the value to set, should be castable using float()
@@ -1256,13 +1269,13 @@ cdef class JB_Env:
         :param c: the object's class (e.g. as retrieved from :py:meth:`.find_class`)
         :param name: the field's name
         :param sig: the signature of the field (e.g. "java/lang/String")
-        
+
         :return: a field ID that can be used in calls to get and get static fields
         '''
         cdef:
             jfieldID id
             __JB_FieldID jbid
-        
+
         id = self.env[0].GetStaticFieldID(self.env, c.c, name, sig)
         if id == NULL:
             return None
@@ -1271,13 +1284,13 @@ cdef class JB_Env:
         jbid.sig = sig
         jbid.is_static = False
         return jbid
-        
+
     def get_static_object_field(self, JB_Class c, __JB_FieldID field):
         '''Return an object field on a class
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the object stored in the class's static field
         :rtype: JB_Object
         '''
@@ -1290,98 +1303,98 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def get_static_boolean_field(self, JB_Class c, __JB_FieldID field):
         '''Return a boolean static field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the boolean value stored in the class's static field
         :rtype: bool
         '''
         return self.env[0].GetStaticBooleanField(self.env, c.c, field.id) != 0
-        
+
     def get_static_char_field(self, JB_Class c, __JB_FieldID field):
         '''Return a char static field's value
-        
+
         :param c: the class (e.g. as returieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the char value stored in the class's static field
         :rtype: unichr
         '''
         return unichr(self.env[0].GetStaticCharField(self.env, c.c, field.id))
-        
+
     def get_static_byte_field(self, JB_Class c, __JB_FieldID field):
         '''Return a byte static field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the byte value stored in the class's static field
         :rtype: int
         '''
         return self.env[0].GetStaticByteField(self.env, c.c, field.id)
-        
+
     def get_static_short_field(self, JB_Class c, __JB_FieldID field):
         '''Return a short static field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the short stored in the class's static field
         :rtype: JB_Object
         '''
         return self.env[0].GetStaticShortField(self.env, c.c, field.id)
-        
+
     def get_static_int_field(self, JB_Class c, __JB_FieldID field):
         '''Return an int field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the integer value stored in the class's static field
         :rtype: int
         '''
         return self.env[0].GetStaticIntField(self.env, c.c, field.id)
-        
+
     def get_static_long_field(self, JB_Class c, __JB_FieldID field):
         '''Return a long field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the long value stored in the class's static field
         :rtype: long
         '''
         return self.env[0].GetStaticLongField(self.env, c.c, field.id)
-        
+
     def get_static_float_field(self, JB_Class c, __JB_FieldID field):
         '''Return a float field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the float value stored in the class's static field
         :rtype: float
         '''
         return self.env[0].GetStaticFloatField(self.env, c.c, field.id)
-        
+
     def get_static_double_field(self, JB_Class c, __JB_FieldID field):
         '''Return a double field's value
-        
+
         :param c: the class (e.g. as retrieved from :py:meth:`.find_class`)
         :param field: a field ID retrieved from :py:meth:`.get_static_field_id`
-        
+
         :return: the double value stored in the class's static field
         :rtype: float
         '''
         return self.env[0].GetStaticDoubleField(self.env, c.c, field.id)
-        
+
     def set_static_object_field(self, JB_Class c, __JB_FieldID field, JB_Object o):
         '''Set a static object field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param o: the object that will become the field's new value
@@ -1389,10 +1402,10 @@ cdef class JB_Env:
         cdef:
             jobject jvalue = NULL if o is None else o.o
         self.env[0].SetStaticObjectField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_boolean_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static boolean field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be cast to bool and assigned to the field
@@ -1400,7 +1413,7 @@ cdef class JB_Env:
         cdef:
             jboolean jvalue = 1 if value else 0
         self.env[0].SetStaticBooleanField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_char_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static char field in a class
 
@@ -1411,10 +1424,10 @@ cdef class JB_Env:
         cdef:
             jchar jvalue = ord(value[0])
         self.env[0].SetStaticCharField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_byte_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static byte field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1422,10 +1435,10 @@ cdef class JB_Env:
         cdef:
             jbyte jvalue = int(value)
         self.env[0].SetStaticByteField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_char_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static char field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1433,10 +1446,10 @@ cdef class JB_Env:
         cdef:
             jchar jvalue = ord(value[0])
         self.env[0].SetStaticCharField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_short_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static short field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1444,10 +1457,10 @@ cdef class JB_Env:
         cdef:
             jshort jvalue = int(value)
         self.env[0].SetStaticShortField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_int_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static int field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1455,10 +1468,10 @@ cdef class JB_Env:
         cdef:
             jint jvalue = int(value)
         self.env[0].SetStaticIntField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_long_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static long field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1466,10 +1479,10 @@ cdef class JB_Env:
         cdef:
             jlong jvalue = int(value)
         self.env[0].SetStaticLongField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_float_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static float field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1477,10 +1490,10 @@ cdef class JB_Env:
         cdef:
             jfloat jvalue = float(value)
         self.env[0].SetStaticFloatField(self.env, c.c, field.id, jvalue)
-        
+
     def set_static_double_field(self, JB_Class c, __JB_FieldID field, value):
         '''Set a static double field in a class
-        
+
         :param c: the class in question, e.g. as retrieved from :py:meth:`.find_class`
         :param field: a field id retrieved from :py:meth:'.get_static_field_id`
         :param value: a value that will be assigned to the field
@@ -1531,10 +1544,10 @@ cdef class JB_Env:
 
     def new_string(self, u):
         '''Turn a unicode string into a Java string object
-        
+
         :param u: a unicode string (ideally) or a string that can be
                   encoded in utf-16 like this: u.encode("utf-16")
-                  
+
         :return: a Java string object
         :rtype: JB_Object
         '''
@@ -1552,10 +1565,10 @@ cdef class JB_Env:
         if e is not None:
              raise e
         return jbo
-        
+
     def new_string_utf(self, char *s):
         '''Turn a Python string into a Java string object
-        
+
         :param s: a UTF-8 encoded Python string
         :return: a Java string object
         :rtype: JB_Object
@@ -1572,7 +1585,7 @@ cdef class JB_Env:
 
     def get_string(self, JB_Object s):
         '''Turn a Java string object into a Python unicode string
-        
+
         :param s: a Java object
         :return: the unicode string representation of the object
         :rtype: unicode
@@ -1597,7 +1610,7 @@ cdef class JB_Env:
         :rtype: str
         '''
         cdef:
-           const char *chars 
+           const char *chars
         if <int> s.o == 0:
            return None
         chars = self.env[0].GetStringUTFChars(self.env, s.o, NULL)
@@ -1607,15 +1620,15 @@ cdef class JB_Env:
 
     def get_array_length(self, JB_Object array):
         '''Return the length of an array
-        
+
         :param array: a Java array
         :return: the number of elements in the array
         '''
         return self.env[0].GetArrayLength(self.env, array.o)
-        
+
     def get_boolean_array_elements(self, JB_Object array):
         '''Return the contents of a Java boolean array as a numpy array
-        
+
         :param array: a Java boolean array
         '''
         cdef:
@@ -1627,7 +1640,7 @@ cdef class JB_Env:
         data = result.data
         self.env[0].GetBooleanArrayRegion(self.env, array.o, 0, alen, <jboolean *>data)
         return result.astype(np.bool8)
-        
+
     def get_byte_array_elements(self, JB_Object array):
         '''Return the contents of a Java byte array as a numpy array
 
@@ -1643,10 +1656,10 @@ cdef class JB_Env:
         data = result.data
         self.env[0].GetByteArrayRegion(self.env, array.o, 0, alen, <jbyte *>data)
         return result
-        
+
     def get_short_array_elements(self, JB_Object array):
         '''Return the contents of a Java short array as a numpy array
-        
+
         array - a Java "short []" array
         returns a 1-d numpy array of np.int16s
         '''
@@ -1662,7 +1675,7 @@ cdef class JB_Env:
 
     def get_int_array_elements(self, JB_Object array):
         '''Return the contents of a Java byte array as a numpy array
-        
+
         array - a Java "int []" array
         returns a 1-d numpy array of np.int32s
         '''
@@ -1675,10 +1688,10 @@ cdef class JB_Env:
         data = result.data
         self.env[0].GetIntArrayRegion(self.env, array.o, 0, alen, <jint *>data)
         return result
-    
+
     def get_long_array_elements(self, JB_Object array):
         '''Return the contents of a Java long array as a numpy array
-        
+
         array - a Java "long []" array
         returns a 1-d numpy array of np.int64s
         '''
@@ -1691,10 +1704,10 @@ cdef class JB_Env:
         data = result.data
         self.env[0].GetLongArrayRegion(self.env, array.o, 0, alen, <jlong *>data)
         return result
-        
+
     def get_float_array_elements(self, JB_Object array):
         '''Return the contents of a Java float array as a numpy array
-        
+
         array - a Java "float []" array
         returns a 1-d numpy array of np.int32s
         '''
@@ -1707,10 +1720,10 @@ cdef class JB_Env:
         data = result.data
         self.env[0].GetFloatArrayRegion(self.env, array.o, 0, alen, <jfloat *>data)
         return result
-        
+
     def get_double_array_elements(self, JB_Object array):
         '''Return the contents of a Java double array as a numpy array
-        
+
         array - a Java "int []" array
         returns a 1-d numpy array of np.int32s
         '''
@@ -1723,7 +1736,7 @@ cdef class JB_Env:
         data = result.data
         self.env[0].GetDoubleArrayRegion(self.env, array.o, 0, alen, <jdouble *>data)
         return result
-        
+
     def get_object_array_elements(self, JB_Object array):
         '''Return the contents of a Java object array as a list of wrapped objects'''
         cdef:
@@ -1741,7 +1754,7 @@ cdef class JB_Env:
                     raise e
                 result.append(sub)
         return result
-        
+
     def make_boolean_array(self, array):
         '''Create a java boolean [] array from the contents of a numpy array'''
         cdef:
@@ -1749,7 +1762,7 @@ cdef class JB_Env:
             jobject o
             jsize alen = barray.shape[0]
             jboolean *data = <jboolean *>(barray.data)
-        
+
         o = self.env[0].NewBooleanArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate byte array of size %d"%alen)
@@ -1758,14 +1771,14 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def make_byte_array(self, np.ndarray[dtype=np.uint8_t, ndim=1, negative_indices=False, mode='c'] array):
         '''Create a java byte [] array from the contents of a numpy array'''
         cdef:
             jobject o
             jsize alen = array.shape[0]
             jbyte *data = <jbyte *>(array.data)
-        
+
         o = self.env[0].NewByteArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate byte array of size %d"%alen)
@@ -1774,14 +1787,14 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def make_short_array(self, np.ndarray[dtype=np.int16_t, ndim=1, negative_indices=False, mode='c'] array):
         '''Create a java short [] array from the contents of a numpy array'''
         cdef:
             jobject o
             jsize alen = array.shape[0]
             jshort *data = <jshort *>(array.data)
-        
+
         o = self.env[0].NewShortArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate short array of size %d"%alen)
@@ -1790,14 +1803,14 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-    
+
     def make_int_array(self, np.ndarray[dtype=np.int32_t, ndim=1, negative_indices=False, mode='c'] array):
         '''Create a java int [] array from the contents of a numpy array'''
         cdef:
             jobject o
             jsize alen = array.shape[0]
             jint *data = <jint *>(array.data)
-        
+
         o = self.env[0].NewIntArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate int array of size %d"%alen)
@@ -1806,14 +1819,14 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def make_long_array(self, np.ndarray[dtype=np.int64_t, ndim=1, negative_indices=False, mode='c'] array):
         '''Create a java long [] array from the contents of a numpy array'''
         cdef:
             jobject o
             jsize alen = array.shape[0]
             jlong *data = <jlong *>(array.data)
-        
+
         o = self.env[0].NewLongArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate long array of size %d"%alen)
@@ -1822,14 +1835,14 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def make_float_array(self, np.ndarray[dtype=np.float32_t, ndim=1, negative_indices=False, mode='c'] array):
         '''Create a java float [] array from the contents of a numpy array'''
         cdef:
             jobject o
             jsize alen = array.shape[0]
             jfloat *data = <jfloat *>(array.data)
-        
+
         o = self.env[0].NewFloatArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate float array of size %d"%alen)
@@ -1838,14 +1851,14 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def make_double_array(self, np.ndarray[dtype=np.float64_t, ndim=1, negative_indices=False, mode='c'] array):
         '''Create a java double [] array from the contents of a numpy array'''
         cdef:
             jobject o
             jsize alen = array.shape[0]
             jdouble *data = <jdouble *>(array.data)
-        
+
         o = self.env[0].NewDoubleArray(self.env, alen)
         if o == NULL:
             raise MemoryError("Failed to allocate double array of size %d"%alen)
@@ -1854,10 +1867,10 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def make_object_array(self, int len, JB_Class klass):
         '''Create a java object [] array filled with all nulls
-        
+
         len - # of elements in array
         klass - class of objects that will be stored
         '''
@@ -1870,10 +1883,10 @@ cdef class JB_Env:
         if e is not None:
             raise e
         return result
-        
+
     def set_object_array_element(self, JB_Object jbo, int index, JB_Object v):
         '''Set an element within an object array
-        
+
         jbo - the object array
         index - the zero-based index of the element to set
         v - the value to be inserted
@@ -1882,10 +1895,10 @@ cdef class JB_Env:
             self.env[0].SetObjectArrayElement(self.env, jbo.o, index, NULL)
         else:
             self.env[0].SetObjectArrayElement(self.env, jbo.o, index, v.o)
-        
+
 cdef make_jb_object(JB_Env env, jobject o):
     '''Wrap a Java object in a JB_Object with appropriate reference handling
-    
+
     The idea here is to take a temporary reference on the current local
     frame, get a global reference that will persist and can be accessed
     across threads, and then delete the local reference.
@@ -1893,7 +1906,7 @@ cdef make_jb_object(JB_Env env, jobject o):
     cdef:
         jobject oref
         JB_Object jbo
-    
+
     oref = env.env[0].NewGlobalRef(env.env, o)
     if oref == NULL:
         return (None, MemoryError("Failed to make new global reference"))

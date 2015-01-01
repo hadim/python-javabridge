@@ -38,7 +38,7 @@ def in_cwd(basename):
 
 def build_cython():
     """Compile the pyx files if we have them.
-    
+
     The git repository has the .pyx files but not the .c files, and
     the source distributions that are uploaded to PyPI have the .c
     files and not the .pyx files. (The reason for the latter is that
@@ -83,7 +83,7 @@ def ext_modules():
             # Build libjvm from jvm.dll on Windows.
             # This assumes that we're using mingw32 for build
             #
-            cmd = ["dlltool", "--dllname", 
+            cmd = ["dlltool", "--dllname",
                    os.path.join(jdk_home,"jre\\bin\\client\\jvm.dll"),
                    "--output-lib","libjvm.a",
                    "--input-def","jvm.def",
@@ -189,20 +189,20 @@ def get_version():
     if os.path.exists(os.path.join(os.path.dirname(__file__), '.git')):
         import subprocess
         try:
-            git_version = str(subprocess.Popen(['git', 'describe'], 
+            git_version = str(subprocess.Popen(['git', 'describe'],
                               stdout=subprocess.PIPE).communicate()[0].strip())
             git_version = git_version.lstrip("b'").rstrip("'")
         except:
             pass
 
-    version_file = os.path.join(os.path.dirname(__file__), 'javabridge', 
+    version_file = os.path.join(os.path.dirname(__file__), 'javabridge',
                                 '_version.py')
     if os.path.exists(version_file):
         with open(version_file) as f:
             cached_version_line = f.read().strip()
         try:
             # From http://stackoverflow.com/a/3619714/17498
-            cached_version = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", 
+            cached_version = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
                                        cached_version_line, re.M).group(1)
         except:
             raise RuntimeError("Unable to find version in %s" % version_file)
